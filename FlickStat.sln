@@ -1,0 +1,26 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 11.00
+# Visual Studio 2010
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "FlickStat", "FlickStat\FlickStat.vcxproj", "{5DFD0AEC-795A-4375-8BCE-7582AE417517}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "TestApp", "TestApp\TestApp.vcxproj", "{2AF56FB1-4F7E-4429-834E-68B9368A7553}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Win32 = Debug|Win32
+		Release|Win32 = Release|Win32
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{5DFD0AEC-795A-4375-8BCE-7582AE417517}.Debug|Win32.ActiveCfg = Debug|Win32
+		{5DFD0AEC-795A-4375-8BCE-7582AE417517}.Debug|Win32.Build.0 = Debug|Win32
+		{5DFD0AEC-795A-4375-8BCE-7582AE417517}.Release|Win32.ActiveCfg = Release|Win32
+		{5DFD0AEC-795A-4375-8BCE-7582AE417517}.Release|Win32.Build.0 = Release|Win32
+		{2AF56FB1-4F7E-4429-834E-68B9368A7553}.Debug|Win32.ActiveCfg = Debug|Win32
+		{2AF56FB1-4F7E-4429-834E-68B9368A7553}.Debug|Win32.Build.0 = Debug|Win32
+		{2AF56FB1-4F7E-4429-834E-68B9368A7553}.Release|Win32.ActiveCfg = Release|Win32
+		{2AF56FB1-4F7E-4429-834E-68B9368A7553}.Release|Win32.Build.0 = Release|Win32
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+EndGlobal

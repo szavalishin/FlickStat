@@ -1,0 +1,1 @@
+#define FLICKSTAT_INTERNAL
