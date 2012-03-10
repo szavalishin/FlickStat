@@ -74,7 +74,8 @@ unsigned int UpdateTrainingSet(char* learning_file, char* TrainFile, char* PredF
 			fscanf(fpred, "%d %*f %f", &class_out, &prec) != EOF &&
 			fscanf(fold, "%d", &class_old) != EOF){
 				//if precision is big enough then adding data to training set
-				if(class_out == class_in && (class_in == 1 ? prec : 1 - prec) > threashold_value)
+				//if(class_out == class_in && (class_in == 1 ? prec : 1 - prec) > threashold_value)
+				if((prec > 0.5 ? prec : 1 - prec) > threashold_value)
 					fprintf(ftrain, "%d %s\n", class_out, str);
 
 				//checking if any labels was changed
