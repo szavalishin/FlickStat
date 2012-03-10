@@ -32,10 +32,10 @@ int _tmain(int argc, _TCHAR* argv[])
 	FlickStat::SearchParams Params;
 
 	FlickStat::InitSearchParams(&Params);
-	Params.Sort = FlickStat::SortType::stInterestDesc;
+	Params.Sort = FlickStat::SortType::stDatePostedAsc;
 	Params.Size = isMedium;
-	Params.Tags =  "architecture,interior,indoor"; //"nature,landscape,outdoor";
-	const int ClassNum = 0; //image class number: 1 - outdoor, 0 - indoor
+	Params.Tags =  "nature,landscape,outdoor"; //"architecture,interior,indoor"; //"nature,landscape,outdoor";
+	const int ClassNum = 1; //image class number: 1 - outdoor, -1 - indoor
 	Params.WantImage = true;
 
 	FILE* f = fopen("C:\\Etti\\Uni\\UIR\\3 - Flickr\\Apps\\Test\\Stats.txt", "w");
@@ -50,7 +50,7 @@ int _tmain(int argc, _TCHAR* argv[])
 	ulong HistL[HistSize], HistS[HistSize], HistT[HistSize];
 
 	//downloading images...
-	uint maxi = 100;
+	uint maxi = 350;
 	for(uint i = 0; i < maxi; i++){
 		//getting photo
 		FlickStat::Image* img = FlickStat::GetImage(fs);
