@@ -42,13 +42,11 @@ int _tmain(int argc, _TCHAR* argv[])
 			fclose(fin);
 
 			unsigned int TP = Np - FN;
-			printf("Accuracy = %.2f%%\nPrecision = %.2f%%\nRecall = %.2f%%\n\nPress any key...\n", 
+			printf("Accuracy = %.2f%%\nPrecision = %.2f%%\nRecall = %.2f%%\n", 
 				(1.0 - (float)(FP + FN)/(Np + Nn))*100, (float)TP/(TP + FP)*100, (float)TP/(TP + FN)*100);
 		}else
 			printf("Wrong file names\n");
 	}
-
-	_getch();
 
 	return 0;
 }

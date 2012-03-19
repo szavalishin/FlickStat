@@ -2,9 +2,9 @@
 //
 
 #include "stdafx.h"
-#include <conio.h>
 #include <windows.h>
 #include <string>
+#include <conio.h>
 
 #define TrainFileName "train.txt"
 #define ModelFileName "model.txt"
@@ -65,7 +65,7 @@ unsigned int UpdateTrainingSet(char* learning_file, char* TrainFile, char* PredF
 		int class_in = 0,
 			class_out = 0,
 			class_old = 0;
-		double prec = 0;
+		float prec = 0;
 
 		fscanf(fpred, "%*[^\n]s"); //skipping first line
 
@@ -104,7 +104,6 @@ int _tmain(int argc, _TCHAR* argv[])
 {
 	if(argc < 5){
 		printf("Wrong arguments. Wants: self-train.exe train_set_size threshold_value learning_file testing_file\n");
-		_getch();
 		return 0;
 	}
 
@@ -118,19 +117,15 @@ int _tmain(int argc, _TCHAR* argv[])
 	wcstombs(learning_file, argv[3], 150);
 	wcstombs(testing_file, argv[4], 150);
 	swscanf(argv[1], L"%d", &train_set_size);
-	swscanf(argv[2], L"%d", &threshold_value);
+	swscanf(argv[2], L"%f", &threshold_value);
 
 	//creating training set from learning_file
 	if(CreateTrainingSet(learning_file, TrainFileName, train_set_size)){
 		//self-training...
-		unsigned int 
-			LastUpdCount = train_set_size,
-			UpdCount = train_set_size;
+		unsigned int UpdCount = train_set_size;
 		do{ 
-			LastUpdCount = UpdCount;
-
 			//training SVM
-			system(((string)"svm-train -g 0.1 -b 1 " + TrainFileName + " " + ModelFileName).c_str());
+			system(((string)"svm-train -g 0.5 -b 1 " + TrainFileName + " " + ModelFileName).c_str());
 
 			//predicting labels
 			system(((string)"svm-predict -b 1 " + learning_file + " " + ModelFileName + " " + PredFileName).c_str());
@@ -144,8 +139,12 @@ int _tmain(int argc, _TCHAR* argv[])
 		system(((string)"calc-proc " + testing_file + " " + PredFileName).c_str());
 	}else{
 		printf("Wrong file names\n");
-		_getch();
 	};
+
+	//unlink(TrainFileName);
+	unlink(PredFileName);
+	unlink(OldFileName);
+	unlink(NewFileName);
 
 	return 0;
 }

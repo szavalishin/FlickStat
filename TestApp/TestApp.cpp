@@ -3,8 +3,8 @@
 
 #include "stdafx.h"
 #include "FlickStat.h"
-#include <conio.h>
 #include <iostream>
+#include <direct.h>
 
 using namespace std;
 
@@ -24,21 +24,41 @@ void CalcHist(ulong* Hist, uchar HistSize, double HistMin, double HistMax, LST64
 
 int _tmain(int argc, _TCHAR* argv[])
 {
+	//getting params
+	int ClassNum = 1; //1 - outdoor, -1 - indoor
+	uint ImageCount = 100;
+	int SaveImages = 0;
+
+	if(argc < 5){
+		printf("Wrong arguments. Wants: TestApp.exe class_num image_count out_file save_images");
+		return 0;
+	};
+
+	swscanf(argv[1], L"%d", &ClassNum);
+	swscanf(argv[2], L"%d", &ImageCount);
+	swscanf(argv[4], L"%d", &SaveImages);
+
+	//creating fs session
 	fsSession fs = FlickStat::Init("76fc6e8497f2654dacab29f9d9e18c18", "1369e07cf7fb3ea8", 15);
 	FlickStat::SetResultPageSize(fs, 200);
 	FlickStat::SetWebCacheSize(fs, 20);
-	FlickStat::SetWebCacheDir(fs, "C:\\Etti\\Uni\\UIR\\3 - Flickr\\Apps\\Test");
+
+	//creating web cache dir
+	char *wd = getcwd(0, 0);
+	mkdir(((string)wd + "\\cache").c_str());
+	FlickStat::SetWebCacheDir(fs, (string)wd + "\\cache");
+	
 	FlickStat::SetConnectionTimeout(fs, 60000);
 	FlickStat::SearchParams Params;
 
 	FlickStat::InitSearchParams(&Params);
-	Params.Sort = FlickStat::SortType::stDatePostedAsc;
+	Params.Sort = FlickStat::SortType::stRelevance;
 	Params.Size = isMedium;
-	Params.Tags =  "nature,landscape,outdoor"; //"architecture,interior,indoor"; //"nature,landscape,outdoor";
-	const int ClassNum = 1; //image class number: 1 - outdoor, -1 - indoor
+
+	Params.Tags = (ClassNum == 1) ? "landscape" : "interior,architecture";
 	Params.WantImage = true;
 
-	FILE* f = fopen("C:\\Etti\\Uni\\UIR\\3 - Flickr\\Apps\\Test\\Stats.txt", "w");
+	FILE* f = _wfopen(argv[3], L"w");
 
 	printf("Init done\n");
 
@@ -50,11 +70,10 @@ int _tmain(int argc, _TCHAR* argv[])
 	ulong HistL[HistSize], HistS[HistSize], HistT[HistSize];
 
 	//downloading images...
-	uint maxi = 350;
-	for(uint i = 0; i < maxi; i++){
+	for(uint i = 0; i < ImageCount; i++){
 		//getting photo
 		FlickStat::Image* img = FlickStat::GetImage(fs);
-		cout<<"Downloading photo "<<i+1<<'/'<<maxi<<"\n";
+		cout<<"Downloading photo "<<i+1<<'/'<<ImageCount<<"\n";
 
 		if(!img){
 			printf("%s\n", FlickStat::GetLastError(fs).c_str());
@@ -82,7 +101,8 @@ int _tmain(int argc, _TCHAR* argv[])
 				ImgProc::FreeImgLST64f(ImgLST);
 			}
 
-			img->Img = "";
+			if(SaveImages)
+				img->Img = "";
 			FreeImage(img);
 
 			//printing info
@@ -102,8 +122,6 @@ int _tmain(int argc, _TCHAR* argv[])
 
 	FlickStat::Free(fs);
 	printf("Free done\n");
-
-	_getch();
 	return 0;
 }
 
