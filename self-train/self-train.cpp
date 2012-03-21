@@ -26,7 +26,7 @@ bool CreateTrainingSet(char* learning_file, char* TrainFile, unsigned int train_
 			PosCount = 0, 
 			NegCount = 0, 
 			MaxCount = train_set_size/2;
-		char str[1000];
+		char str[100000];
 		int class_val = 0;
 
 		//reading input file...
@@ -38,7 +38,7 @@ bool CreateTrainingSet(char* learning_file, char* TrainFile, unsigned int train_
 			}
 
 			//storing labels
-			fprintf(fold, "%d\n", class_val);
+			fprintf(fold, "%d\n", class_val*-1);
 		}
 
 		fclose(fin);
@@ -50,7 +50,7 @@ bool CreateTrainingSet(char* learning_file, char* TrainFile, unsigned int train_
 	return true;
 };
 
-unsigned int UpdateTrainingSet(char* learning_file, char* TrainFile, char* PredFile, float threashold_value){
+unsigned int UpdateTrainingSet(char* learning_file, char* TrainFile, char* PredFile, float threshold){
 	unsigned int Upd = 0;
 	
 	FILE* fin = fopen(learning_file, "r");
@@ -61,7 +61,7 @@ unsigned int UpdateTrainingSet(char* learning_file, char* TrainFile, char* PredF
 
 	//checking files
 	if(fin && ftrain && fpred && fold && fnew){
-		char str[1000];
+		char str[100000];
 		int class_in = 0,
 			class_out = 0,
 			class_old = 0;
@@ -72,18 +72,17 @@ unsigned int UpdateTrainingSet(char* learning_file, char* TrainFile, char* PredF
 		//reading input file and pred file...
 		while(fscanf(fin, "%d %[^\n]s", &class_in, str) != EOF && 
 			fscanf(fpred, "%d %*f %f", &class_out, &prec) != EOF &&
-			fscanf(fold, "%d", &class_old) != EOF){
-				//if precision is big enough then adding data to training set
-				//if(class_out == class_in && (class_in == 1 ? prec : 1 - prec) > threashold_value)
-				if((prec > 0.5 ? prec : 1 - prec) > threashold_value)
-					fprintf(ftrain, "%d %s\n", class_out, str);
+			fscanf(fold, "%d", &class_old) != EOF)
+		{
+			if(class_in == class_old || (prec > 0.5 ? prec : 1 - prec) > threshold)
+				fprintf(ftrain, "%d %s\n", class_out, str);
 
-				//checking if any labels was changed
-				if(class_out != class_old)
-					Upd++;
+			//checking if any labels was changed
+			if(class_out != class_old)
+				Upd++;
 
-				//writing new labels to file
-				fprintf(fnew, "%d\n", class_out, str);
+			//writing new labels to file
+			fprintf(fnew, "%d\n", class_out, str);
 		}
 
 		fclose(fin);
@@ -103,21 +102,21 @@ unsigned int UpdateTrainingSet(char* learning_file, char* TrainFile, char* PredF
 int _tmain(int argc, _TCHAR* argv[])
 {
 	if(argc < 5){
-		printf("Wrong arguments. Wants: self-train.exe train_set_size threshold_value learning_file testing_file\n");
+		printf("Wrong arguments. Wants: self-train.exe train_set_size threshold learning_file testing_file\n");
 		return 0;
 	}
 
 	//reading arguments
 	unsigned int train_set_size = 100;
-	float threshold_value = 0.5;
 	char 
 		learning_file[300] = "",
 		testing_file[300] = "";
+	float threshold = 0.5;
 
 	wcstombs(learning_file, argv[3], 150);
 	wcstombs(testing_file, argv[4], 150);
 	swscanf(argv[1], L"%d", &train_set_size);
-	swscanf(argv[2], L"%f", &threshold_value);
+	swscanf(argv[2], L"%f", &threshold);
 
 	//creating training set from learning_file
 	if(CreateTrainingSet(learning_file, TrainFileName, train_set_size)){
@@ -125,13 +124,13 @@ int _tmain(int argc, _TCHAR* argv[])
 		unsigned int UpdCount = train_set_size;
 		do{ 
 			//training SVM
-			system(((string)"svm-train -g 0.5 -b 1 " + TrainFileName + " " + ModelFileName).c_str());
+			system(((string)"svm-train -t 4 -b 1 " + TrainFileName + " " + ModelFileName).c_str());
 
 			//predicting labels
 			system(((string)"svm-predict -b 1 " + learning_file + " " + ModelFileName + " " + PredFileName).c_str());
-
+			
 			//updating training set
-			UpdCount = UpdateTrainingSet(learning_file, TrainFileName, PredFileName, threshold_value);
+			UpdCount = UpdateTrainingSet(learning_file, TrainFileName, PredFileName, threshold);
 		}while(UpdCount);
 
 		//calculating self-trained SVM accuracy 

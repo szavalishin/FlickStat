@@ -9,9 +9,12 @@
 #include <direct.h>
 
 #define TrainFileName "train_fsst.txt"
+#define KernelFileName "train_kernel_fsst.txt"
 #define DownloadFileName "download_fsst.txt"
 #define PredFileName "pred.txt"
 #define ModelFileName "model.txt"
+#define TrainSetName "train_set_fsst.txt"
+#define TestSetName "test_set_fsst.txt"
 
 #define FLICKSTAT_EXTERNAL
 
@@ -133,7 +136,7 @@ void DownloadData(const char* DownloadFile, unsigned int PortionSize, bool RandL
 	GetImages(fs_out, "tmp2.txt", PortionSize/2, 1);
 
 	//adding data to download file and randomizing labels
-	FILE *fout = fopen("tmp3.txt", "w");
+	FILE *fout = fopen(DownloadFile, "w");
 	FILE *fin = fopen("tmp1.txt", "r");
 
 	int class_in = 0, class_out = 1;
@@ -155,13 +158,9 @@ void DownloadData(const char* DownloadFile, unsigned int PortionSize, bool RandL
 	std::fclose(fin);
 	std::fclose(fout);
 
-	//scaling data
-	system(((string)"svm-scale -l 0 tmp3.txt>" + DownloadFile).c_str());
-
 	//closing files
 	unlink("tmp1.txt");
 	unlink("tmp2.txt");
-	unlink("tmp3.txt");
 };
 
 void AppendData(const char *AppendTo, const char *AppendFrom){
@@ -211,7 +210,7 @@ unsigned int CountWellRecognizedObjects(const char *PredFile, float Threshold){
 
 	fscanf(fin, "%*[^\n]s"); //skipping first line
 
-	//encounting well-recognized objects
+	//calculating well-recognized objects
 	while(fscanf(fin, "%*d %*f %f", &prec) != EOF)
 		if((prec > 0.5 ? prec : 1 - prec) > Threshold)
 			ObjCount++;
@@ -222,10 +221,49 @@ unsigned int CountWellRecognizedObjects(const char *PredFile, float Threshold){
 
 unsigned int TestAlgQuality(const char *TestFile, float Threshold){
 	//predicting labels in test file
-	system(((string)"svm-predict -b 1 " + TestFile + " " + ModelFileName + " " + PredFileName).c_str());
+	FILE *fin = fopen(TestFile, "r");
+	FILE *fout = fopen("tmp.txt", "w");
 
-	//encounting accuracy
+	char str[2];
+	uint i = 0;
+	while(i < 100){
+		fread(str, sizeof(byte), 1, fin);
+		fwrite(str, sizeof(byte), 1, fout);
+		if(str[0] == '\n')
+			i++;
+	}
+
+	fclose(fin);
+	fclose(fout);
+
+	system(((string)"svm-predict -b 1 " + "tmp.txt" + " " + ModelFileName + " " + PredFileName).c_str());
+	system(((string)"calc-proc " + "tmp.txt" + " " + PredFileName).c_str());
+	unlink("tmp.txt");
+
+	//calculating accuracy
 	return CountWellRecognizedObjects(PredFileName, Threshold);
+};
+
+void CreateSets(const char *KernelFile, const char *TrainSet, const char *TestSet){
+	FILE *fin = fopen(KernelFile, "r");
+	FILE *ftrain = fopen(TrainSet, "w");
+	FILE *ftest = fopen(TestSet, "w");
+
+	char str[2];
+	uint i = 0;
+	while(fread(str, sizeof(byte), 1, fin)){
+		if(i < 100)
+			fwrite(str, sizeof(byte), 1, ftest);
+		else
+			fwrite(str, sizeof(byte), 1, ftrain);
+
+		if(str[0] == '\n')
+			i++;
+	}
+
+	fclose(fin);
+	fclose(ftrain);
+	fclose(ftest);
 };
 
 int _tmain(int argc, _TCHAR* argv[])
@@ -245,6 +283,12 @@ int _tmain(int argc, _TCHAR* argv[])
 	swscanf(argv[2], L"%f", &RecThreshold);
 	swscanf(argv[3], L"%f", &RecCountThreshold);
 
+	//creating train file
+	FILE *f = fopen(TrainFileName, "w");
+	fclose(f);
+
+	AppendData(TrainFileName, testing_file);
+
 	//downloading first data
 	fsSession //sessions for indoor and outdoor classes
 		fs_in = PrepareSession(-1), 
@@ -253,24 +297,33 @@ int _tmain(int argc, _TCHAR* argv[])
 	DownloadData(DownloadFileName, PortionSize, false, fs_in, fs_out);
 
 	//training alg...
-	unsigned int WellRecognized = 0;
+	unsigned int WellRecognized = 0, SetSize = 100;
 	do{
 		//appending downloaded data to training set
 		AppendData(TrainFileName, DownloadFileName);
 
-		//self-training alg with training set
-		system(((string)"self-train.exe 100 0.1" + " " + TrainFileName + " " + testing_file).c_str());
+		//calculating kernel
+		system(((string)"comp-kernel 0.0" + " " + TrainFileName + " " + KernelFileName).c_str());
+
+		//creating training set and testing set from precomputed kernel
+		CreateSets(KernelFileName, TrainSetName, TestSetName);
+
+		//self-training alg with kernel file
+		char SetSizeS[10];
+		itoa(SetSize*0.3, SetSizeS, 10); 
+		SetSize += 100;
+		system(((string)"self-train " + SetSizeS + " 0.75" + " " + TrainSetName + " " + TestSetName).c_str());
 
 		//downloading another portion of data
 		DownloadData(DownloadFileName, PortionSize, false, fs_in, fs_out);
 
 		//testing alg with new data
-		WellRecognized = TestAlgQuality(DownloadFileName, RecThreshold);
+		WellRecognized = TestAlgQuality(TrainSetName, RecThreshold);
 	}while((float)WellRecognized/PortionSize < RecCountThreshold);
 
 	//testing alg with test file
-	system(((string)"svm-predict -b 1 " + testing_file + " " + ModelFileName + " " + PredFileName).c_str());
-	system(((string)"calc-proc.exe " + testing_file + " " + PredFileName).c_str());
+	system(((string)"svm-predict -b 1 " + TestSetName + " " + ModelFileName + " " + PredFileName).c_str());
+	system(((string)"calc-proc " + TestSetName + " " + PredFileName).c_str());
 
 	//killing tmp
 	unlink(TrainFileName);
@@ -278,6 +331,9 @@ int _tmain(int argc, _TCHAR* argv[])
 	FreeSession(fs_in);
 	FreeSession(fs_out);
 	unlink(PredFileName);
+	unlink(KernelFileName);
+	unlink(TrainSetName);
+	unlink(TestSetName);
 
 	_getch();
 

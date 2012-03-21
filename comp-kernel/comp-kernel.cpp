@@ -49,7 +49,7 @@ unsigned int LoadVectors(ParamVector **Xi, wchar_t *in_file){
 };
 
 //Xi should be &Xi[Xl], where Xl is X param number
-float CalcKernel(const ParamVector *X, const ParamVector *Y){
+float CalcKernel(const ParamVector *X, const ParamVector *Y, float gamma){
 	//calculating Chi2 kernel
 	float Chi = 0;
 	unsigned int Size = min(X->Size, Y->Size);
@@ -60,23 +60,24 @@ float CalcKernel(const ParamVector *X, const ParamVector *Y){
 			Chi += 2*(pow(x - y, 2)/(x + y));
 	}
 	
-	//calculating exp Chi2 Kernel
-	float gamma = 0.5;
-	return exp(-gamma*Chi); //return 1 - Chi; - for standart Chi2
+	if(gamma == 0.0)
+		return 1 - Chi; //Chi2 Kernel
+
+	return exp(-gamma*Chi); //Chi2exp kernel
 };
 
-void CalcNewVector(const ParamVector *Xi, ParamVector *X){
+void CalcNewVector(const ParamVector *Xi, ParamVector *X, float gamma){
 	ParamVector tmp = *X;
 	tmp.Val = (float*)malloc(sizeof(float)*X->Size);
 	memcpy(tmp.Val, X->Val, X->Size*sizeof(float));
 
 	for(unsigned int i = 0; i < X->Size; i++)
-		X->Val[i] = CalcKernel(&tmp, &Xi[i]);
+		X->Val[i] = CalcKernel(&tmp, &Xi[i], gamma);
 
 	free(tmp.Val);
 };
 
-void CalcVectors(ParamVector *Xi, wchar_t *out_file, unsigned int XSize){
+void CalcVectors(ParamVector *Xi, wchar_t *out_file, unsigned int XSize, float gamma){
 	FILE *fout = _wfopen(out_file, L"w");
 
 	ParamVector X;
@@ -86,11 +87,11 @@ void CalcVectors(ParamVector *Xi, wchar_t *out_file, unsigned int XSize){
 	//reading vector from input file
 	for(unsigned int i = 0; i < XSize; i++){
 		//copying vector data to new vector
-		memcpy(X.Val, Xi[i].Val, Xi[i].Size*sizeof(float));
+		memcpy(X.Val, Xi[i].Val, min(X.Size, Xi[i].Size)*sizeof(float));
 		X.ClassNum = Xi[i].ClassNum;
 		
 		//calculating new vector
-		CalcNewVector(Xi, &X);
+		CalcNewVector(Xi, &X, gamma);
 
 		//printing vector
 		fprintf(fout, "%d 0:%d", X.ClassNum, i+1);
@@ -138,23 +139,26 @@ void NormalizeVectors(ParamVector *Xi, unsigned int VectCount){
 
 int _tmain(int argc, _TCHAR* argv[])
 {
-	if(argc < 3){
-		printf("Not enough arguments. Wants: comp-kernel in_file out_file\n");
+	if(argc < 4){
+		printf("Not enough arguments. Wants: comp-kernel gamma in_file out_file\n");
 		return 0;
 	}
+
+	float gamma = 0.5;
+	swscanf(argv[1], L"%f", &gamma);
 
 	ParamVector *Xi = (ParamVector*)malloc(sizeof(ParamVector));
 	Xi[0].Val = (float*)malloc(sizeof(float)*VectSize);
 	Xi[0].Size = 28;
 
 	//loading input vectors
-	unsigned int VectCount = LoadVectors(&Xi, argv[1]);
+	unsigned int VectCount = LoadVectors(&Xi, argv[2]);
 
 	//norm vectors
 	NormalizeVectors(Xi, VectCount);
 
 	//calculating kernel
-	CalcVectors(Xi, argv[2], VectCount);
+	CalcVectors(Xi, argv[3], VectCount, gamma);
 
 	//killing resorces
 	for(unsigned int i = 0; i < VectCount; i++)
