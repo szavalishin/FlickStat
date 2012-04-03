@@ -1,7 +1,7 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
-    <LocalDebuggerCommandArguments>100 0.5 train_chi_exp.txt test_chi_exp.txt</LocalDebuggerCommandArguments>
+    <LocalDebuggerCommandArguments>50 0.9 train_chiexp_3000_100.txt</LocalDebuggerCommandArguments>
     <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
     <LocalDebuggerWorkingDirectory>$(SolutionDir)\Debug</LocalDebuggerWorkingDirectory>
   </PropertyGroup>

@@ -126,54 +126,73 @@ void FreeSession(fsSession fs){
 	FlickStat::Free(fs);
 };
 
-void DownloadData(const char* DownloadFile, unsigned int PortionSize, bool RandLabels, fsSession fs_in, fsSession fs_out){
-	//downloading first class
-	char PortionSizeS[5];
-	_itoa(PortionSize/2, PortionSizeS, 10);
-	GetImages(fs_in, "tmp1.txt", PortionSize/2, -1);
-
-	//downloading second class
-	GetImages(fs_out, "tmp2.txt", PortionSize/2, 1);
-
-	//adding data to download file and randomizing labels
-	FILE *fout = fopen(DownloadFile, "w");
-	FILE *fin = fopen("tmp1.txt", "r");
-
-	int class_in = 0, class_out = 1;
-	char str[1000];
-
-	//writing first class
-	while(fscanf(fin, "%d %[^\n]s", &class_in, str) != EOF){
-		class_out = RandLabels ? class_out*-1 : class_in;
-		std::fprintf(fout, "%d %s\n", class_out, str);
-	}
-	std::fclose(fin);
-
-	//writing second class
-	fin = fopen("tmp2.txt", "r");
-	while(fscanf(fin, "%d %[^\n]s", &class_in, str) != EOF){
-		class_out = RandLabels ? class_out*-1 : class_in;
-		std::fprintf(fout, "%d %s\n", class_out, str);
-	}
-	std::fclose(fin);
-	std::fclose(fout);
-
-	//closing files
-	unlink("tmp1.txt");
-	unlink("tmp2.txt");
-};
-
-void AppendData(const char *AppendTo, const char *AppendFrom){
+void AppendData(const char *AppendTo, const char *AppendFrom, unsigned int Pos, unsigned int Count){
 	FILE *fout = fopen(AppendTo, "a");
 	FILE *fin = fopen(AppendFrom, "r");
 
 	//writing to out file
 	char str[1];
-	while(fread(str, sizeof(char), 1, fin))
-		fwrite(str, sizeof(char), 1, fout);
+	unsigned int CurPos = 0;
+
+	while(fread(str, sizeof(char), 1, fin) && CurPos < Pos + Count){
+		if(Pos <= CurPos)
+			fwrite(str, sizeof(char), 1, fout);
+
+		if(str[0] == '\n')
+			CurPos++;
+	}
 	
 	std::fclose(fin);
 	std::fclose(fout);
+};
+
+void AppendData(const char *AppendTo, const char *AppendFrom){
+	AppendData(AppendTo, AppendFrom, 0, 0xFFFFFFFF);
+}
+
+void DownloadData(const char* DownloadFile, unsigned int PortionSize, bool RandLabels, 
+	fsSession fs_in, fsSession fs_out, const char* local_db_file, bool UseLocalDB, unsigned int SetSize)
+{
+	if(!UseLocalDB){
+		//downloading first class
+		char PortionSizeS[5];
+		_itoa(PortionSize/2, PortionSizeS, 10);
+		GetImages(fs_in, "tmp1.txt", PortionSize/2, -1);
+
+		//downloading second class
+		GetImages(fs_out, "tmp2.txt", PortionSize/2, 1);
+
+		//adding data to download file and randomizing labels
+		FILE *fout = fopen(DownloadFile, "w");
+		FILE *fin = fopen("tmp1.txt", "r");
+
+		int class_in = 0, class_out = 1;
+		char str[1000];
+
+		//writing first class
+		while(fscanf(fin, "%d %[^\n]s", &class_in, str) != EOF){
+			class_out = RandLabels ? class_out*-1 : class_in;
+			std::fprintf(fout, "%d %s\n", class_out, str);
+		}
+		std::fclose(fin);
+
+		//writing second class
+		fin = fopen("tmp2.txt", "r");
+		while(fscanf(fin, "%d %[^\n]s", &class_in, str) != EOF){
+			class_out = RandLabels ? class_out*-1 : class_in;
+			std::fprintf(fout, "%d %s\n", class_out, str);
+		}
+		std::fclose(fin);
+		std::fclose(fout);
+
+		//closing files
+		unlink("tmp1.txt");
+		unlink("tmp2.txt");
+	}else{
+		FILE *fout = fopen(DownloadFile, "w");
+		fclose(fout);
+		AppendData(DownloadFile, local_db_file, SetSize, PortionSize);
+	};
 };
 
 void AppendDataB(const char *AppendTo, const char *AppendFrom){
@@ -181,25 +200,28 @@ void AppendDataB(const char *AppendTo, const char *AppendFrom){
 	FILE *fin = fopen(AppendFrom, "r");
 	FILE *fpred = fopen(PredFileName, "r");
 
-	char str[1000];
+	char str[10000];
 	int class_in = 0,
 		class_out = 0,
 		class_old = 0;
 	float prec = 0;
 
-	fscanf(fpred, "%*[^\n]s"); //skipping first line
+	if(fpred)
+		fscanf(fpred, "%*[^\n]s"); //skipping first line
 
 	//reading input file and pred file...
 	while(fscanf(fin, "%d %[^\n]s", &class_in, str) != EOF && 
-		fscanf(fpred, "%d %*f %f", &class_out, &prec) != EOF)
-			//if precision is big enough then adding data to training set
-			//if(class_out == class_in && (class_in == 1 ? prec : 1 - prec) > threashold_value)
-			if((prec > 0.5 ? prec : 1 - prec) < 0.75)
-				fprintf(fout, "%d %s\n", class_out, str);
+		(fpred ? (fscanf(fpred, "%d %*f %f", &class_out, &prec) != EOF) : true))
+	{
+		if(!fpred)
+			class_out = class_in;
+		fprintf(fout, "%d %s\n", class_out, str);
+	}
 	
 	std::fclose(fin);
 	std::fclose(fout);
-	std::fclose(fpred);
+	if(fpred)
+		std::fclose(fpred);
 };
 
 unsigned int CountWellRecognizedObjects(const char *PredFile, float Threshold){
@@ -219,14 +241,14 @@ unsigned int CountWellRecognizedObjects(const char *PredFile, float Threshold){
 	return ObjCount;
 };
 
-unsigned int TestAlgQuality(const char *TestFile, float Threshold){
+unsigned int TestAlgQuality(const char *TestFile, float Threshold, unsigned int SetSize){
 	//predicting labels in test file
 	FILE *fin = fopen(TestFile, "r");
 	FILE *fout = fopen("tmp.txt", "w");
 
 	char str[2];
 	uint i = 0;
-	while(i < 100){
+	while(i < SetSize){
 		fread(str, sizeof(byte), 1, fin);
 		fwrite(str, sizeof(byte), 1, fout);
 		if(str[0] == '\n')
@@ -244,15 +266,16 @@ unsigned int TestAlgQuality(const char *TestFile, float Threshold){
 	return CountWellRecognizedObjects(PredFileName, Threshold);
 };
 
-void CreateSets(const char *KernelFile, const char *TrainSet, const char *TestSet){
+void CreateSets(const char *KernelFile, const char *TrainSet, const char *TestSet, unsigned int TestSetSize){
 	FILE *fin = fopen(KernelFile, "r");
 	FILE *ftrain = fopen(TrainSet, "w");
 	FILE *ftest = fopen(TestSet, "w");
 
 	char str[2];
 	uint i = 0;
+
 	while(fread(str, sizeof(byte), 1, fin)){
-		if(i < 100)
+		if(i < TestSetSize)
 			fwrite(str, sizeof(byte), 1, ftest);
 		else
 			fwrite(str, sizeof(byte), 1, ftrain);
@@ -269,19 +292,30 @@ void CreateSets(const char *KernelFile, const char *TrainSet, const char *TestSe
 int _tmain(int argc, _TCHAR* argv[])
 {
 	if(argc < 5){
-		printf("Wrong arguments. Wants: fs-self-train.exe portion_size rec_threshold rec_count_threshold test_file\n");
+		printf("Wrong arguments. Wants: fs-self-train portion_size rec_threshold rec_count_threshold test_file [local_db_file] [initial_portion_size]\n");
 		return 0;
 	}
 
 	//reading args
 	int PortionSize = 100;
+	unsigned int SetSize = 100;
 	float RecThreshold = 0.5, RecCountThreshold = 0.75;
-	char testing_file[300] = "";
+	char testing_file[300] = "", local_db_file[300] = "";
+	bool UseLocalDB = false;
+	unsigned int InitialSetSize = SetSize;
 
 	wcstombs(testing_file, argv[4], 300);
+	if(argc > 5){
+		wcstombs(local_db_file, argv[5], 300);
+		UseLocalDB = true;
+	}
 	swscanf(argv[1], L"%d", &PortionSize);
 	swscanf(argv[2], L"%f", &RecThreshold);
 	swscanf(argv[3], L"%f", &RecCountThreshold);
+	if(argc > 6){
+		swscanf(argv[6], L"%d", &SetSize);
+		InitialSetSize = SetSize;
+	}
 
 	//creating train file
 	FILE *f = fopen(TrainFileName, "w");
@@ -291,39 +325,46 @@ int _tmain(int argc, _TCHAR* argv[])
 
 	//downloading first data
 	fsSession //sessions for indoor and outdoor classes
-		fs_in = PrepareSession(-1), 
-		fs_out = PrepareSession(1); 
+		fs_in = 0,
+		fs_out = 0;
 	
-	DownloadData(DownloadFileName, PortionSize, false, fs_in, fs_out);
+	if(!UseLocalDB){
+		fs_in = PrepareSession(-1);
+		fs_out = PrepareSession(1); 
+	};
+
+	DownloadData(DownloadFileName, SetSize, false, fs_in, fs_out, local_db_file, UseLocalDB, 0);
 
 	//training alg...
-	unsigned int WellRecognized = 0, SetSize = 100;
+	unsigned int WellRecognized = 0;
 	do{
 		//appending downloaded data to training set
-		AppendData(TrainFileName, DownloadFileName);
+		AppendDataB(TrainFileName, DownloadFileName);
 
 		//calculating kernel
-		system(((string)"comp-kernel 0.0" + " " + TrainFileName + " " + KernelFileName).c_str());
+		system(((string)"comp-kernel 0.5" + " " + TrainFileName + " " + KernelFileName).c_str());
 
 		//creating training set and testing set from precomputed kernel
-		CreateSets(KernelFileName, TrainSetName, TestSetName);
+		CreateSets(KernelFileName, TrainSetName, TestSetName, PortionSize);
 
 		//self-training alg with kernel file
 		char SetSizeS[10];
-		itoa(SetSize*0.3, SetSizeS, 10); 
-		SetSize += 100;
-		system(((string)"self-train " + SetSizeS + " 0.75" + " " + TrainSetName + " " + TestSetName).c_str());
+		itoa(SetSize, SetSizeS, 10); 
+		SetSize += PortionSize;
+		system(((string)"self-train " + SetSizeS + " 0" + " " + TrainSetName).c_str());
 
 		//downloading another portion of data
-		DownloadData(DownloadFileName, PortionSize, false, fs_in, fs_out);
+		DownloadData(DownloadFileName, PortionSize, false, fs_in, fs_out, local_db_file, UseLocalDB, SetSize);
 
 		//testing alg with new data
-		WellRecognized = TestAlgQuality(TrainSetName, RecThreshold);
+		WellRecognized = TestAlgQuality(TrainSetName, RecThreshold, SetSize);
+		system(((string)"svm-predict -b 1 " + TestSetName + " " + ModelFileName + " " + PredFileName).c_str());
+		system(((string)"calc-proc " + TestSetName + " " + PredFileName + ">>out.txt").c_str());
 	}while((float)WellRecognized/PortionSize < RecCountThreshold);
 
 	//testing alg with test file
-	system(((string)"svm-predict -b 1 " + TestSetName + " " + ModelFileName + " " + PredFileName).c_str());
-	system(((string)"calc-proc " + TestSetName + " " + PredFileName).c_str());
+	system(((string)"svm-predict -b 1 " + testing_file + " " + ModelFileName + " " + PredFileName).c_str());
+	system(((string)"calc-proc " + testing_file + " " + PredFileName).c_str());
 
 	//killing tmp
 	unlink(TrainFileName);
