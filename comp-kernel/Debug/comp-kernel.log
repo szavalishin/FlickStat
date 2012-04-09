@@ -1,9 +1,9 @@
-﻿Build started 03.04.2012 23:21:37.
-     1>Project "C:\Etti\Uni\UIR\3 - Flickr\Apps\FlickStat\comp-kernel\comp-kernel.vcxproj" on node 2 (clean target(s)).
+﻿Build started 10.04.2012 0:15:09.
+     1>Project "C:\Etti\Uni\UIR\3 - Flickr\Apps\FlickStat\comp-kernel\comp-kernel.vcxproj" on node 3 (clean target(s)).
      1>_PrepareForClean:
          Deleting file "Debug\comp-kernel.lastbuildstate".
      1>Done Building Project "C:\Etti\Uni\UIR\3 - Flickr\Apps\FlickStat\comp-kernel\comp-kernel.vcxproj" (clean target(s)).
 
 Build succeeded.
 
-Time Elapsed 00:00:00.36
+Time Elapsed 00:00:00.30

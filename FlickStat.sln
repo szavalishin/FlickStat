@@ -13,6 +13,8 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "fs-self-train", "fs-self-tr
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "comp-kernel", "comp-kernel\comp-kernel.vcxproj", "{4D776E6D-C447-47D1-8899-AD95794D9233}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "co-train", "co-train\co-train.vcxproj", "{5BED9786-763F-4F51-9648-5D9015891E14}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Win32 = Debug|Win32
@@ -43,6 +45,10 @@ Global
 		{4D776E6D-C447-47D1-8899-AD95794D9233}.Debug|Win32.Build.0 = Debug|Win32
 		{4D776E6D-C447-47D1-8899-AD95794D9233}.Release|Win32.ActiveCfg = Release|Win32
 		{4D776E6D-C447-47D1-8899-AD95794D9233}.Release|Win32.Build.0 = Release|Win32
+		{5BED9786-763F-4F51-9648-5D9015891E14}.Debug|Win32.ActiveCfg = Debug|Win32
+		{5BED9786-763F-4F51-9648-5D9015891E14}.Debug|Win32.Build.0 = Debug|Win32
+		{5BED9786-763F-4F51-9648-5D9015891E14}.Release|Win32.ActiveCfg = Release|Win32
+		{5BED9786-763F-4F51-9648-5D9015891E14}.Release|Win32.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

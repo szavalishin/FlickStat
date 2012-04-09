@@ -1,9 +1,5 @@
-﻿Build started 03.04.2012 23:21:35.
-     1>Project "C:\Etti\Uni\UIR\3 - Flickr\Apps\FlickStat\self-train\self-train.vcxproj" on node 2 (clean target(s)).
-     1>_PrepareForClean:
-         Deleting file "Debug\self-train.lastbuildstate".
-     1>Done Building Project "C:\Etti\Uni\UIR\3 - Flickr\Apps\FlickStat\self-train\self-train.vcxproj" (clean target(s)).
+﻿Build started 10.04.2012 0:15:08.
 
 Build succeeded.
 
-Time Elapsed 00:00:00.37
+Time Elapsed 00:00:00.09
