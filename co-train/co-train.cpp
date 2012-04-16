@@ -53,6 +53,9 @@ svm_node *read_problem(const char *filename, svm_problem *prob, uint max_size)
 	prob->l = 0;
 	elements = 0;
 
+	if(max_size == 0)
+		max_size = 0xFFFFFFFF;
+
 	int max_line_len = 1024;
 	uint cur_size = 0;
 	char *line = Malloc(char,max_line_len);
@@ -185,11 +188,13 @@ svm_node *LoadPredictedLabels(const char *prob_file, uint pos, uint count){
 		uint i = 0;
 		int max_line_length = 1024;
 
-		while(readline(fin, &buffer, &max_line_length) && i < count - pos){
+		while(readline(fin, &buffer, &max_line_length) && i < count + pos){
 			if(i >= pos){
 				float value;
-				sscanf(buffer, "%d %f", &(label_set[i].index), &value);
-				label_set[i].value = value;
+				int index;
+				sscanf(buffer, "%d %f", &index, &value);
+				label_set[i - pos].index = index;
+				label_set[i - pos].value = value;
 			}
 			i++;
 		};
@@ -204,7 +209,7 @@ svm_node *LoadPredictedLabels(const char *prob_file, uint pos, uint count){
 
 void CopyLabels(double *old_labels, svm_node *new_labels, uint pos, uint count){
 	if(old_labels && new_labels)
-		for(uint i = pos; i < count; i++)
+		for(uint i = pos; i < pos + count; i++)
 			old_labels[i] = new_labels[i].index;
 };
 
@@ -228,6 +233,16 @@ void PredictLabels(const char *pred_file, const svm_model *model, const svm_prob
 	fclose(fout);
 };
 
+void PrintLabels(const char *out_file, const svm_problem *data){
+	FILE *fout = fopen(out_file, "w");
+
+	if(fout){
+		for(uint i = 0; i < data->l; i++)
+			fprintf(fout, "%d\n", (int)data->y[i]);
+		fclose(fout);
+	}
+};
+
 bool TrainSVM(const char *in_file, const char *prob_file, const char *pred_file, const svm_parameter *params, 
 	uint initial_set_size, uint train_set_size, uint test_set_size, uint portion_size)
 {
@@ -241,10 +256,10 @@ bool TrainSVM(const char *in_file, const char *prob_file, const char *pred_file,
 		data_set.l -= portion_size; //excluding recently downloaded data from training set
 		
 		//training classifier
-		svm_node *labels = LoadPredictedLabels(prob_file, test_set_size - 1, data_set.l);
-		CopyLabels(data_set.y, labels, initial_set_size - 1, data_set.l - initial_set_size);
+		svm_node *labels = LoadPredictedLabels(prob_file, test_set_size, data_set.l);
+		CopyLabels(data_set.y, labels, initial_set_size, data_set.l - initial_set_size);
 		svm_model *model = svm_train(&data_set, params);
-
+		
 		//shifting data pointer back to test set
 		data_set.l += portion_size; //including recently downloaded data to training set
 		ShiftDataPointer(&data_set, -test_set_size);
@@ -264,8 +279,11 @@ bool TrainSVM(const char *in_file, const char *prob_file, const char *pred_file,
 			free(data_set.x);
 		if(data_set.y) 
 			free(data_set.y);
-		if(items) 
+		if(items){ 
 			free(items);
+			free(data_set.x);
+			free(data_set.y);
+		}
 
 		return false; //error occured
 	}
@@ -289,14 +307,23 @@ void ReLabel(const char *pred_file, const char *pred_file_a, const char *pred_fi
 	if(fin_a && fin_b){
 		int label_a, label_b, label = 0;
 		float prob_a, prob_b, prob = 0;
+		uint i = 0;
 
 		while(ReadLabelAndProb(fin_a, &label_a, &prob_a) != EOF && 
 			ReadLabelAndProb(fin_b, &label_b, &prob_b)  != EOF)
 		{
 			prob = 0;
+
+			//memory
+			
 			if(fin)
 				fscanf(fin, "%d %f\n", &label, &prob);
+			if(!fin || i++ < test_set_size)
+				prob = 0;
+			
 
+			//maximum probablity
+			
 			if(fin && prob > prob_a && prob > prob_b)
 				fprintf(fout, "%d %f\n", label, prob);
 			else 
@@ -304,6 +331,18 @@ void ReLabel(const char *pred_file, const char *pred_file_a, const char *pred_fi
 					fprintf(fout, "%d %f\n", label_a, prob_a);
 				else
 					fprintf(fout, "%d %f\n", label_b, prob_b);
+			
+
+			//average weight
+			/*
+			int label_n = (label*prob + label_a*prob_a + label_b*prob_b)/(prob + prob_a + prob_b) > 0.0 ? 1 : -1;
+			float prob_n = (prob + prob_a + prob_b)/3;
+			
+			if(prob_n > prob)
+				fprintf(fout, "%d %f\n", label_n, prob_n);
+			else
+				fprintf(fout, "%d %f\n", label, prob);
+			*/
 		}
 	}
 
@@ -323,10 +362,12 @@ void ReLabel(const char *pred_file, const char *pred_file_a, const char *pred_fi
 		fclose(fin_b);
 };
 
-void CalcAccuracy(const char *file_in, const char *file_out, uint test_set_size, const char *res_file){
+double CalcAccuracy(const char *file_in, const char *file_out, uint test_set_size, const char *res_file, bool print){
 	FILE *fin = fopen(file_in, "r");
 	FILE *fout = fopen(file_out, "r");
 	FILE *fres = fopen(res_file, "a");
+
+	double acc;
 
 	if(fin && fout){
 		uint Np = 0, Nn = 0, FN = 0, FP = 0, TP = 0, TN = 0;
@@ -338,29 +379,92 @@ void CalcAccuracy(const char *file_in, const char *file_out, uint test_set_size,
 		{
 			if(valin == 1){
 				Np++;
-				if(valout != 1)
-					FP++;
-				else
+				if(valout == 1)
 					TP++;
+				else
+					FN++;
 			}else{
 				Nn++;
-				if(valout != -1)
-					FN++;
-				else
+				if(valout == -1)
 					TN++;
+				else
+					FP++;
 			}
 		}
 
-		fprintf(fres, "Accuracy = %.2f%%\nPrecision = %.2f%%\nRecall = %.2f%%\n", 
-			(1.0 - (float)(FP + FN)/(Np + Nn))*100, (float)TP/(TP + FP)*100, (float)TP/(TP + FN)*100);
+		acc = (double)(TP + TN)/(Np + Nn);
+
+		if(print)
+			fprintf(fres, "Accuracy = %.2f%%\nPrecision = %.2f%%\nRecall = %.2f%%\n", 
+				(float)acc*100, (float)TP/(TP + FP)*100, (float)TP/(TP + FN)*100);
 	};
 
 	if(fres)
-		fclose(fres);
+		std::fclose(fres);
 	if(fin)
-		fclose(fin);
+		std::fclose(fin);
 	if(fout)
-		fclose(fout);
+		std::fclose(fout);
+
+	return acc;
+};
+
+void SpareData(const char *in_file, const char *out_file_a, const char *out_file_b){
+	svm_problem data;
+	svm_node *items = read_problem(in_file, &data, 0);
+
+	FILE *fouta = fopen(out_file_a, "w");
+	FILE *foutb = fopen(out_file_b, "w");
+
+	if(fouta && foutb && items){
+		svm_node *np = 0;
+		for(uint i = 0; i < data.l; i++){
+			//printing label
+			fprintf(fouta, "%d", (int)data.y[i]);
+			fprintf(foutb, "%d", (int)data.y[i]);
+
+			//writing data
+			np = data.x[i];
+			uint index = 0;
+			while(np->index != -1){
+				if(np->index < 5)
+					fprintf(fouta, " %d:%g", np->index, np->value);
+				else
+					fprintf(foutb, " %d:%g", np->index - 4, np->value);
+				np++;
+			};
+
+			fprintf(fouta, "\n");
+			fprintf(foutb, "\n");
+		};
+	};
+
+	if(fouta)
+		fclose(fouta);
+	if(foutb)
+		fclose(foutb);
+	if(items){
+		free(items);
+		free(data.x);
+		free(data.y);
+	}
+
+};
+
+void fcopy(const char *old_file, const char *new_file){
+	FILE *fold = fopen(old_file, "r");
+	FILE *fnew = fopen(new_file, "w");
+
+	if(fold && fnew){
+		char *buff = Malloc(char, 1024);
+		while(fread(buff, sizeof(char), 1024, fold))
+			fwrite(buff, sizeof(char), 1024, fnew);
+	}
+
+	if(fold)
+		fclose(fold);
+	if(fnew)
+		fclose(fnew);
 };
 
 int _tmain(int argc, _TCHAR* argv[])
@@ -388,10 +492,17 @@ int _tmain(int argc, _TCHAR* argv[])
 	//creating svm params
 	svm_parameter params;
 	SetParamValues(&params);
-
+	
 	//co-training...
 	uint train_set_size = initial_set_size;
+	uint initial_portion_size = portion_size;
 	bool IsError = false;
+
+	//reading data
+	svm_problem data_a, data_b;
+	//svm_node *items_a = read_problem(in_file_a, &data_a, 0);
+	//svm_node *items_b = read_problem(in_file_b, &data_b, 0);
+
 	do{
 		//"downloading" new data portion
 		train_set_size += portion_size;
@@ -404,9 +515,9 @@ int _tmain(int argc, _TCHAR* argv[])
 
 		//re-labeling data with most confident labels
 		ReLabel(PredFile, PredFileA, PredFileB, test_set_size, initial_set_size);
-
+		
 		//calculating accuracy and writing it to out file
-		CalcAccuracy(in_file_a, PredFile, test_set_size, OutFile);
+		CalcAccuracy(in_file_a, PredFile, test_set_size, OutFile, true); 
 	}while(!IsError);
 
 	//killing files

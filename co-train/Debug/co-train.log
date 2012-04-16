@@ -1,9 +1,9 @@
-﻿Build started 10.04.2012 0:15:07.
-     1>Project "C:\Etti\Uni\UIR\3 - Flickr\Apps\FlickStat\co-train\co-train.vcxproj" on node 2 (clean target(s)).
+﻿Build started 16.04.2012 11:06:16.
+     1>Project "C:\Etti\Uni\UIR\3 - Flickr\Apps\FlickStat\co-train\co-train.vcxproj" on node 3 (clean target(s)).
      1>_PrepareForClean:
          Deleting file "Debug\co-train.lastbuildstate".
      1>Done Building Project "C:\Etti\Uni\UIR\3 - Flickr\Apps\FlickStat\co-train\co-train.vcxproj" (clean target(s)).
 
 Build succeeded.
 
-Time Elapsed 00:00:00.12
+Time Elapsed 00:00:00.24

@@ -1,5 +1,9 @@
-﻿Build started 10.04.2012 0:15:07.
+﻿Build started 16.04.2012 11:06:11.
+     1>Project "C:\Etti\Uni\UIR\3 - Flickr\Apps\FlickStat\FlickStat\FlickStat.vcxproj" on node 2 (clean target(s)).
+     1>_PrepareForClean:
+         Deleting file "Debug\FlickStat.lastbuildstate".
+     1>Done Building Project "C:\Etti\Uni\UIR\3 - Flickr\Apps\FlickStat\FlickStat\FlickStat.vcxproj" (clean target(s)).
 
 Build succeeded.
 
-Time Elapsed 00:00:00.08
+Time Elapsed 00:00:01.07
