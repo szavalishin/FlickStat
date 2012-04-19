@@ -213,24 +213,15 @@ void CopyLabels(double *old_labels, svm_node *new_labels, uint pos, uint count){
 			old_labels[i] = new_labels[i].index;
 };
 
-void PredictLabels(const char *pred_file, const svm_model *model, const svm_problem *data_set){
-	FILE *fout = fopen(pred_file, "w");
-
-	double predict_label;
-	uint nr_class = svm_get_nr_class(model);
-	double *prob_estimates = (double *) malloc(nr_class*sizeof(double));
+void PredictLabels(const svm_model *model, svm_problem *data_set, svm_node *labels){
+	double *value = new double[svm_get_nr_class(model)];
 
 	for(uint i = 0; i < data_set->l; i++){
-		predict_label = svm_predict_probability(model, data_set->x[i], prob_estimates);
-
-		fprintf(fout, "%g", predict_label);
-		for(uint j = 0; j < nr_class; j++)
-			fprintf(fout, " %g", prob_estimates[j]);
-		fprintf(fout,"\n");
+		labels[i].index = (int)svm_predict_probability(model, data_set->x[i], value);
+		labels[i].value = value[0] > value[1] ? value[0] : value[1];
 	};
 
-	free(prob_estimates);
-	fclose(fout);
+	delete [] value;
 };
 
 void PrintLabels(const char *out_file, const svm_problem *data){
@@ -243,52 +234,35 @@ void PrintLabels(const char *out_file, const svm_problem *data){
 	}
 };
 
-bool TrainSVM(const char *in_file, const char *prob_file, const char *pred_file, const svm_parameter *params, 
-	uint initial_set_size, uint train_set_size, uint test_set_size, uint portion_size)
+bool TrainSVM(svm_problem *data_set, svm_node *PredLabels, svm_node *CurPredLabels, const svm_parameter *params, uint initial_set_size, 
+	uint train_set_size, uint test_set_size, uint portion_size)
 {
-	//loading data set
-	svm_problem data_set;
-	svm_node *items = read_problem(in_file, &data_set, train_set_size + test_set_size);
+	//setting up data size
+	uint OrigSize = data_set->l;
+	data_set->l = train_set_size + test_set_size;
 
-	if(data_set.x && data_set.y && items){
-		//shifting input data pointer from test set to train set:
-		ShiftDataPointer(&data_set, test_set_size);
-		data_set.l -= portion_size; //excluding recently downloaded data from training set
+	//shifting input data pointer from test set to train set:
+	ShiftDataPointer(data_set, test_set_size);
+	data_set->l -= portion_size; //excluding recently downloaded data from training set
 		
-		//training classifier
-		svm_node *labels = LoadPredictedLabels(prob_file, test_set_size, data_set.l);
-		CopyLabels(data_set.y, labels, initial_set_size, data_set.l - initial_set_size);
-		svm_model *model = svm_train(&data_set, params);
+	//training classifier
+	CopyLabels(data_set->y, &PredLabels[test_set_size], initial_set_size, data_set->l - initial_set_size);
+	svm_model *model = svm_train(data_set, params);
 		
-		//shifting data pointer back to test set
-		data_set.l += portion_size; //including recently downloaded data to training set
-		ShiftDataPointer(&data_set, -test_set_size);
+	//shifting data pointer back to test set
+	data_set->l += portion_size; //including recently downloaded data to training set
+	ShiftDataPointer(data_set, -test_set_size);
 
-		//predicting new labels and saving them to file
-		PredictLabels(pred_file, model, &data_set);
+	//predicting new labels and saving them to file
+	PredictLabels(model, data_set, CurPredLabels);
+	
+	//killing resources
+	svm_free_and_destroy_model(&model);
 
-		//killing resources
-		free(data_set.x);
-		free(data_set.y);
-		free(items);
-		if(labels)
-			free(labels);
-		svm_free_and_destroy_model(&model);
-	}else{
-		if(data_set.x) 
-			free(data_set.x);
-		if(data_set.y) 
-			free(data_set.y);
-		if(items){ 
-			free(items);
-			free(data_set.x);
-			free(data_set.y);
-		}
+	//restoring data size
+	data_set->l = OrigSize;
 
-		return false; //error occured
-	}
-
-	return true;
+	return true; //all is ok
 };
 
 int ReadLabelAndProb(FILE *fin, int *label, float *prob){
@@ -298,111 +272,85 @@ int ReadLabelAndProb(FILE *fin, int *label, float *prob){
 	return result;
 };
 
-void ReLabel(const char *pred_file, const char *pred_file_a, const char *pred_file_b, uint test_set_size, uint initial_set_size){
-	FILE *fin = fopen(pred_file, "r");
-	FILE *fin_a = fopen(pred_file_a, "r");
-	FILE *fin_b = fopen(pred_file_b, "r");
-	FILE *fout = fopen("tmp.txt", "w");
+bool ReLabel(svm_node *PredLabels, svm_node *PredLabels_a, svm_node *PredLabels_b, uint train_set_size, uint test_set_size, uint initial_set_size){
+	int label_a, label_b, label = 0;
+	float prob_a, prob_b, prob = 0;
+	uint WasChanged = 0;
+	
+	//relabeling...
+	for(uint i = 0; i < test_set_size + train_set_size; i++){	
+		prob = 0;
 
-	if(fin_a && fin_b){
-		int label_a, label_b, label = 0;
-		float prob_a, prob_b, prob = 0;
-		uint i = 0;
-
-		while(ReadLabelAndProb(fin_a, &label_a, &prob_a) != EOF && 
-			ReadLabelAndProb(fin_b, &label_b, &prob_b)  != EOF)
-		{
-			prob = 0;
-
-			//memory
-			
-			if(fin)
-				fscanf(fin, "%d %f\n", &label, &prob);
-			if(!fin || i++ < test_set_size)
-				prob = 0;
-			
-
-			//maximum probablity
-			
-			if(fin && prob > prob_a && prob > prob_b)
-				fprintf(fout, "%d %f\n", label, prob);
-			else 
-				if(prob_a > prob_b)
-					fprintf(fout, "%d %f\n", label_a, prob_a);
-				else
-					fprintf(fout, "%d %f\n", label_b, prob_b);
-			
-
-			//average weight
-			/*
-			int label_n = (label*prob + label_a*prob_a + label_b*prob_b)/(prob + prob_a + prob_b) > 0.0 ? 1 : -1;
-			float prob_n = (prob + prob_a + prob_b)/3;
-			
-			if(prob_n > prob)
-				fprintf(fout, "%d %f\n", label_n, prob_n);
-			else
-				fprintf(fout, "%d %f\n", label, prob);
-			*/
+		//memory	
+		if(i >= test_set_size){
+			prob = PredLabels[i].value;
+			label = PredLabels[i].index;
 		}
+			
+		//labels
+		label_a = PredLabels_a[i].index;
+		label_b = PredLabels_b[i].index;
+		prob_a = PredLabels_a[i].value;
+		prob_b = PredLabels_b[i].value;
+
+		//maximum probablity	
+		/*
+		if(!(prob > prob_a && prob > prob_b)){
+			if(prob_a > prob_b){
+				PredLabels[i].index = label_a;
+				PredLabels[i].value = prob_a;
+			}else{
+				PredLabels[i].index = label_b;
+				PredLabels[i].value = prob_b;
+			}
+		}		*/
+
+		if(label && PredLabels[i].index != label)
+			WasChanged++;
+
+		//average weight
+		
+		int label_n = (label*prob + label_a*prob_a + label_b*prob_b)/(prob + prob_a + prob_b) > 0.0 ? 1 : -1;
+		double prob_n = (prob + prob_a + prob_b)/ (prob == 0.0) ? 2 : 3;
+			
+		if(prob_n > prob){
+			PredLabels[i].index = label_n;
+			PredLabels[i].value = prob_n;
+		}
+		
 	}
 
-	if(fin){
-		fclose(fin);
-		unlink(pred_file);
-	}
-
-	if(fout){
-		fclose(fout);
-		rename("tmp.txt", pred_file);
-	}
-
-	if(fin_a)
-		fclose(fin_a);
-	if(fin_b)
-		fclose(fin_b);
+	return WasChanged/(train_set_size + test_set_size) > 0.0;
 };
 
-double CalcAccuracy(const char *file_in, const char *file_out, uint test_set_size, const char *res_file, bool print){
-	FILE *fin = fopen(file_in, "r");
-	FILE *fout = fopen(file_out, "r");
-	FILE *fres = fopen(res_file, "a");
-
+double CalcAccuracy(double *OrigLabels, svm_node *PredLabels, uint test_set_size, const char *res_file, bool print){
+	FILE *fout = fopen(res_file, "a");
 	double acc;
+	uint Np = 0, Nn = 0, FN = 0, FP = 0, TP = 0, TN = 0;
 
-	if(fin && fout){
-		uint Np = 0, Nn = 0, FN = 0, FP = 0, TP = 0, TN = 0;
-
-		int valin = 0, valout = 0;
-		uint i = 0;
-		while(fscanf(fin, "%d %*[^\n]s", &valin) != EOF && fscanf(fout, "%d %*[^\n]s", &valout) != EOF &&
-			i++ < test_set_size)
-		{
-			if(valin == 1){
-				Np++;
-				if(valout == 1)
-					TP++;
-				else
-					FN++;
-			}else{
-				Nn++;
-				if(valout == -1)
-					TN++;
-				else
-					FP++;
-			}
+	uint i = 0;
+	for(uint i = 0; i < test_set_size; i++){
+		if(OrigLabels[i] == 1){
+			Np++;
+			if(PredLabels[i].index == 1)
+				TP++;
+			else
+				FN++;
+		}else{
+			Nn++;
+			if(PredLabels[i].index == -1)
+				TN++;
+			else
+				FP++;
 		}
+	}
 
-		acc = (double)(TP + TN)/(Np + Nn);
+	acc = (double)(TP + TN)/(Np + Nn);
 
-		if(print)
-			fprintf(fres, "Accuracy = %.2f%%\nPrecision = %.2f%%\nRecall = %.2f%%\n", 
-				(float)acc*100, (float)TP/(TP + FP)*100, (float)TP/(TP + FN)*100);
-	};
+	if(fout && print)
+		fprintf(fout, "Accuracy = %.2f%%\nPrecision = %.2f%%\nRecall = %.2f%%\n", 
+			(float)acc*100, (float)TP/(TP + FP)*100, (float)TP/(TP + FN)*100);
 
-	if(fres)
-		std::fclose(fres);
-	if(fin)
-		std::fclose(fin);
 	if(fout)
 		std::fclose(fout);
 
@@ -467,6 +415,30 @@ void fcopy(const char *old_file, const char *new_file){
 		fclose(fnew);
 };
 
+void CoTrain(svm_problem *data_a, svm_problem *data_b, double *OrigLabels, svm_node *PredLabels, svm_parameter *params, 
+	uint initial_set_size, uint train_set_size, uint test_set_size, uint portion_size)
+{
+	//creating intermediate labels
+	svm_node 
+		*PredLabels_a = new svm_node[train_set_size + test_set_size], 
+		*PredLabels_b = new svm_node[train_set_size + test_set_size];
+
+	//training...
+	do{
+		//training classifier A with train set
+		TrainSVM(data_a, PredLabels, PredLabels_a, params, initial_set_size, train_set_size, test_set_size, portion_size);
+
+		//training classifier B with train set
+		TrainSVM(data_b, PredLabels, PredLabels_b, params, initial_set_size, train_set_size, test_set_size, portion_size);
+
+		//re-labeling data with most confident labels (exit when no labels were changed)
+	}while(ReLabel(PredLabels, PredLabels_a, PredLabels_b, train_set_size, test_set_size, initial_set_size));
+
+	//killing resources
+	delete [] PredLabels_a;
+	delete [] PredLabels_b;
+};
+
 int _tmain(int argc, _TCHAR* argv[])
 {
 	//reading input args
@@ -492,38 +464,43 @@ int _tmain(int argc, _TCHAR* argv[])
 	//creating svm params
 	svm_parameter params;
 	SetParamValues(&params);
-	
-	//co-training...
-	uint train_set_size = initial_set_size;
-	uint initial_portion_size = portion_size;
-	bool IsError = false;
 
 	//reading data
 	svm_problem data_a, data_b;
-	//svm_node *items_a = read_problem(in_file_a, &data_a, 0);
-	//svm_node *items_b = read_problem(in_file_b, &data_b, 0);
+	svm_node *items_a = read_problem(in_file_a, &data_a, 0);
+	svm_node *items_b = read_problem(in_file_b, &data_b, 0);
 
+	//storing true labels
+	double *OrigLabels = Malloc(double, data_a.l);
+	memcpy(OrigLabels, data_a.y, data_a.l*sizeof(double));
+
+	//creating predicted labels
+	svm_node *PredLabels = Malloc(svm_node, data_a.l);
+	for(uint i = 0; i < data_a.l; i++)
+		PredLabels[i].value = 0;
+
+	//co-training...
+	uint train_set_size = initial_set_size;
+	uint initial_portion_size = portion_size;
+	
 	do{
 		//"downloading" new data portion
+		//portion_size = train_set_size;
 		train_set_size += portion_size;
 
-		//training classifier A with train set
-		IsError = !TrainSVM(in_file_a, PredFile, PredFileA, &params, initial_set_size, train_set_size, test_set_size, portion_size);
+		//doing co-train
+		CoTrain(&data_a, &data_b, OrigLabels, PredLabels, &params, initial_set_size, train_set_size, test_set_size, portion_size);
 
-		//training classifier B with train set
-		IsError = !TrainSVM(in_file_b, PredFile, PredFileB, &params, initial_set_size, train_set_size, test_set_size, portion_size);
+		//fixing predicted labels
+		initial_set_size = train_set_size - portion_size;
 
-		//re-labeling data with most confident labels
-		ReLabel(PredFile, PredFileA, PredFileB, test_set_size, initial_set_size);
-		
 		//calculating accuracy and writing it to out file
-		CalcAccuracy(in_file_a, PredFile, test_set_size, OutFile, true); 
-	}while(!IsError);
+		CalcAccuracy(OrigLabels, PredLabels, test_set_size, OutFile, true); 
+	}while(train_set_size < data_a.l);
 
-	//killing files
-	unlink(PredFile);
-	unlink(PredFileA);
-	unlink(PredFileB);
+	//killing data
+	delete [] OrigLabels;
+	delete [] PredLabels;
 
 	return 0;
 }
