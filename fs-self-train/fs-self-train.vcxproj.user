@@ -3,6 +3,6 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <LocalDebuggerWorkingDirectory>$(SolutionDir)\Debug</LocalDebuggerWorkingDirectory>
     <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
-    <LocalDebuggerCommandArguments>100 1.0 1.0 test_3000_100.txt data_13202.txt 200</LocalDebuggerCommandArguments>
+    <LocalDebuggerCommandArguments>1000 1.0 1.0 test_3000_100.txt data_13202.txt 2000</LocalDebuggerCommandArguments>
   </PropertyGroup>
 </Project>

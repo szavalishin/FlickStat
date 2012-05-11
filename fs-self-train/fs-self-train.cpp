@@ -358,8 +358,8 @@ int _tmain(int argc, _TCHAR* argv[])
 
 		//testing alg with new data
 		WellRecognized = TestAlgQuality(TrainSetName, RecThreshold, SetSize);
-		system(((string)"svm-predict -b 1 " + TestSetName + " " + ModelFileName + " " + PredFileName).c_str());
 		system(((string)"calc-proc " + TestSetName + " " + PredFileName + ">>st_out.txt").c_str());
+		system(((string)"svm-predict -b 1 " + TestSetName + " " + ModelFileName + " " + PredFileName).c_str());
 	}while((float)WellRecognized/PortionSize < RecCountThreshold);
 
 	//testing alg with test file

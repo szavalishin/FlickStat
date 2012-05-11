@@ -210,7 +210,31 @@ svm_node *LoadPredictedLabels(const char *prob_file, uint pos, uint count){
 void CopyLabels(double *old_labels, svm_node *new_labels, uint pos, uint count){
 	if(old_labels && new_labels)
 		for(uint i = pos; i < pos + count; i++)
-			old_labels[i] = new_labels[i].index;
+			old_labels[i] = new_labels[i].index; //new_labels[i].value > 0.6 ? new_labels[i].index : old_labels[i]; // <- active learning
+};
+
+void CopyLabels(double *old_labels, double *new_labels, uint pos, uint count){
+	if(old_labels && new_labels)
+		memcpy((void*)&old_labels[pos], (void*)&new_labels[pos], sizeof(double)*count);
+};
+
+svm_problem *FilterNoises(svm_problem *data, svm_node *new_labels, uint pos, uint count, double threshold){
+	svm_problem *new_data = new svm_problem;
+	new_data->y = new double[data->l];
+	new_data->x = new svm_node*[data->l];
+	new_data->l = 0;
+
+	for(uint i = 0; i < pos + count; i++)
+		if(new_labels[i].value > threshold || i < pos){
+			new_data->l++;
+			new_data->y[new_data->l - 1] = i < pos ? data->y[i] : new_labels[i].index; 
+			new_data->x[new_data->l - 1] = data->x[i]; 	
+		}
+
+	new_data->y = (double*)realloc(new_data->y, sizeof(double) * new_data->l);
+	new_data->x = (svm_node**)realloc(new_data->x, sizeof(svm_node*) * new_data->l);
+
+	return new_data;
 };
 
 void PredictLabels(const svm_model *model, svm_problem *data_set, svm_node *labels){
@@ -247,8 +271,9 @@ bool TrainSVM(svm_problem *data_set, svm_node *PredLabels, svm_node *CurPredLabe
 		
 	//training classifier
 	CopyLabels(data_set->y, &PredLabels[test_set_size], initial_set_size, data_set->l - initial_set_size);
-	svm_model *model = svm_train(data_set, params);
-		
+	//svm_problem *filtered_data = FilterNoises(data_set, &PredLabels[test_set_size], initial_set_size, data_set->l - initial_set_size, 0.55); //filtering noises
+	svm_model *model = svm_train(data_set /*filtered_data*/, params);
+	
 	//shifting data pointer back to test set
 	data_set->l += portion_size; //including recently downloaded data to training set
 	ShiftDataPointer(data_set, -test_set_size);
@@ -258,6 +283,9 @@ bool TrainSVM(svm_problem *data_set, svm_node *PredLabels, svm_node *CurPredLabe
 	
 	//killing resources
 	svm_free_and_destroy_model(&model);
+	//delete [] filtered_data->x;
+	//delete [] filtered_data->y;
+	//delete filtered_data;
 
 	//restoring data size
 	data_set->l = OrigSize;
@@ -281,7 +309,8 @@ bool ReLabel(svm_node *PredLabels, svm_node *PredLabels_a, svm_node *PredLabels_
 	for(uint i = 0; i < test_set_size + train_set_size; i++){	
 		prob = 0;
 
-		//memory	
+		//memory
+		
 		if(i >= test_set_size){
 			prob = PredLabels[i].value;
 			label = PredLabels[i].index;
@@ -294,7 +323,7 @@ bool ReLabel(svm_node *PredLabels, svm_node *PredLabels_a, svm_node *PredLabels_
 		prob_b = PredLabels_b[i].value;
 
 		//maximum probablity	
-		/*
+		
 		if(!(prob > prob_a && prob > prob_b)){
 			if(prob_a > prob_b){
 				PredLabels[i].index = label_a;
@@ -303,21 +332,30 @@ bool ReLabel(svm_node *PredLabels, svm_node *PredLabels_a, svm_node *PredLabels_
 				PredLabels[i].index = label_b;
 				PredLabels[i].value = prob_b;
 			}
-		}		*/
+		}
 
 		if(label && PredLabels[i].index != label)
 			WasChanged++;
-
-		//average weight
 		
+		//average weight for co-training
+		/*
 		int label_n = (label*prob + label_a*prob_a + label_b*prob_b)/(prob + prob_a + prob_b) > 0.0 ? 1 : -1;
 		double prob_n = (prob + prob_a + prob_b)/ (prob == 0.0) ? 2 : 3;
 			
 		if(prob_n > prob){
 			PredLabels[i].index = label_n;
 			PredLabels[i].value = prob_n;
-		}
-		
+		}*/
+
+		//average weight for self-training
+		/*
+		int label_n = (label*prob + label_a*prob_a)/(prob + prob_a) > 0.0 ? 1 : -1;
+		double prob_n = (prob + prob_a)/2;
+			
+		if(prob_n > prob){
+			PredLabels[i].index = label_n;
+			PredLabels[i].value = prob_n;
+		}*/
 	}
 
 	return WasChanged/(train_set_size + test_set_size) > 0.0;
@@ -443,7 +481,7 @@ int _tmain(int argc, _TCHAR* argv[])
 {
 	//reading input args
 	if(argc < 5){
-		printf("Not enough arguments. Wants: co-train in_file_a in_file_b initial_set_size test_set_size portion_size\n"
+		std::printf("Not enough arguments. Wants: co-train in_file_a in_file_b initial_set_size test_set_size portion_size\n"
 			"Note that in-files should be like: || test_set |    train_set    ||\n");
 		return 0;
 	}
@@ -493,10 +531,10 @@ int _tmain(int argc, _TCHAR* argv[])
 
 		//fixing predicted labels
 		initial_set_size = train_set_size - portion_size;
-
+		
 		//calculating accuracy and writing it to out file
 		CalcAccuracy(OrigLabels, PredLabels, test_set_size, OutFile, true); 
-	}while(train_set_size < data_a.l);
+	}while(train_set_size + portion_size + test_set_size <= data_a.l);
 
 	//killing data
 	delete [] OrigLabels;
